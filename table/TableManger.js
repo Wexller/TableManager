@@ -1,18 +1,59 @@
 import {TableFilter} from './TableFilter'
 import {TableOrder} from './TableOrder'
+import {arrayChunks} from '../utils';
+import {TablePagination} from './TablePagination';
+import {Emitter} from '../Emitter';
 
 export class TableManger {
   constructor(selector, options) {
-    const {items, filter, order, header} = options
+    this.$el = document.querySelector(selector)
+    this.emitter = new Emitter()
+
+    const {items, filter, order, header, pagination, itemsPerPage} = options
     this.options = {...options}
     this.tableFilter = new TableFilter()
     this.tableOrder = new TableOrder()
-    this.items = items || []
+
+    const paginationOptions = {
+      active: pagination,
+      itemsPerPage: itemsPerPage || items.length,
+      pageCount: pagination ? Math.ceil(items.length / itemsPerPage) : items.length,
+      $el: this.$el,
+      emitter: this.emitter
+    }
+
+    this.#initSubscribers()
+
+    this.pagination = pagination
+      ? new TablePagination(paginationOptions)
+      : false
+
+    this.items = this.#getItems(items)
     this.headerTitle = header['title'] || {}
     this.headerDisplay = header['display'] || {}
-    this.$el = document.querySelector(selector)
 
     this.#render()
+  }
+
+  /**
+   *
+   * @param {Array} items
+   * @return {Array}
+   */
+  #getItems(items) {
+    let result = []
+
+    if (items && items.length) {
+      result = this.pagination.active
+        ? arrayChunks(items, this.pagination.itemsPerPage)
+        : items
+    }
+
+    return result
+  }
+
+  #initSubscribers() {
+    this.emitter.subscribe('page:change', () => this.#render())
   }
 
   /**
@@ -24,6 +65,7 @@ export class TableManger {
         <thead><tr>${this.#getTableHeader()}</tr></thead>
         <tbody>${this.#getTableBody()}</tbody>
       </table>
+      ${this.pagination ? this.pagination.getPagination() : ''}
     `
   }
 
@@ -53,6 +95,17 @@ export class TableManger {
    * @returns {String}
    */
   #getTableBody() {
+    if (this.pagination) {
+      const page = (this.pagination.page - 1) <= this.items.length
+        ? this.pagination.page - 1
+        : this.items.length - 1
+
+      return this.items[page]
+        .map(item => {
+          return `<tr>${this.#getTableItem(item)}</tr>`
+        }).join('')
+    }
+
     return this.items
       .map(item => {
         return `<tr>${this.#getTableItem(item)}</tr>`

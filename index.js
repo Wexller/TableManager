@@ -1,4 +1,5 @@
 import {TableManger} from './table/TableManger'
+import './styles/style.scss'
 
 fetch('https://jsonplaceholder.typicode.com/todos')
   .then(response => response.json())
@@ -12,8 +13,10 @@ fetch('https://jsonplaceholder.typicode.com/todos')
           title: 'Название',
           completed: 'Завершен',
         },
-        display: ['userId', 'id', 'title', 'completed']
-      }
+        display: ['id', 'userId', 'title', 'completed']
+      },
+      pagination: true,
+      itemsPerPage: 10
     }
 
     const tableManger = new TableManger('#table-block', options)
