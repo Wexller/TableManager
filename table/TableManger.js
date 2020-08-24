@@ -1,21 +1,23 @@
 import {TableFilter} from './TableFilter'
 import {TableOrder} from './TableOrder'
-import {arrayChunks} from '../utils';
+import {arrayChunks, findGetParameter} from '../utils';
 import {TablePagination} from './TablePagination';
 import {Emitter} from '../Emitter';
+import {TableDomListener} from './TableDomListener';
 
 export class TableManger {
   constructor(selector, options) {
     this.$el = document.querySelector(selector)
     this.emitter = new Emitter()
 
-    const {items, filter, order, header, pagination, itemsPerPage} = options
+    const {items, filter, order, header, pagination, currentPage, itemsPerPage} = options
     this.options = {...options}
     this.tableFilter = new TableFilter()
     this.tableOrder = new TableOrder()
 
     const paginationOptions = {
       active: pagination,
+      currentPage: currentPage || +findGetParameter('page'),
       itemsPerPage: itemsPerPage || items.length,
       pageCount: pagination ? Math.ceil(items.length / itemsPerPage) : items.length,
       $el: this.$el,
@@ -33,6 +35,11 @@ export class TableManger {
     this.headerDisplay = header['display'] || {}
 
     this.#render()
+
+    this.domListener = new TableDomListener({
+      $el: this.$el,
+      emitter: this.emitter
+    })
   }
 
   /**

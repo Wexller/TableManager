@@ -1,76 +1,15 @@
-import {findGetParameter} from '../utils';
-
 export class TablePagination {
   constructor(options) {
-    const {active, itemsPerPage, pageCount, emitter, $el} = options
-
-    const page = +findGetParameter('page')
+    const {active, currentPage, itemsPerPage, pageCount, emitter, $el} = options
 
     this.active = active || false
     this.itemsPerPage = itemsPerPage
-    this.page = (page >= 1 && page <= pageCount) ? page : 1
+    this.page = (currentPage >= 1 && currentPage <= pageCount) ? currentPage : 1
     this.pageCount = pageCount
     this.emitter = emitter
     this.$el = $el
 
-    this.$el.addEventListener('click', this.#pageChangeHandler.bind(this))
-  }
-
-  /**
-   * On click pagination handler
-   * @param event
-   */
-  #pageChangeHandler(event) {
-    const $clickedEl = event.target
-
-    if ($clickedEl.dataset['type'] === 'pagination') {
-      const dataPage = $clickedEl.dataset['page']
-      let pageChanged = false
-
-      switch (dataPage) {
-        case 'prev':
-          if (this.page - 1 > 0) {
-            this.page -= 1
-            pageChanged = true
-          }
-          break
-
-        case 'next':
-          if (this.page + 1 <= this.pageCount) {
-            this.page += 1
-            pageChanged = true
-          }
-          break
-
-        default:
-          this.page = +dataPage
-          pageChanged = true
-          break
-      }
-
-      if (pageChanged) {
-        this.emitter.emit('page:change')
-      }
-    }
-  }
-
-  /**
-   * Returns HTML pagination
-   * @return {string}
-   */
-  getPagination() {
-    if (this.active) {
-      return `
-      <nav>
-        <ul class="pagination justify-content-center">
-          ${this.#getPreviewsButton()}
-          ${this.#getPageButtons()}
-          ${this.#getNextButton()}
-        </ul>
-      </nav>`
-    }
-
-    return ''
+    this.emitter.subscribe('pagination:click', page => this.#paginationClickController(page))
   }
 
   /**
@@ -109,5 +48,57 @@ export class TablePagination {
                 </li>`
       })
       .join('')
+  }
+
+  /**
+   * Change current page
+   * @param {String} page
+   */
+  #paginationClickController(page) {
+    let pageChanged = false
+
+    switch (page) {
+      case 'prev':
+        if (this.page - 1 > 0) {
+          this.page -= 1
+          pageChanged = true
+        }
+        break
+
+      case 'next':
+        if (this.page + 1 <= this.pageCount) {
+          this.page += 1
+          pageChanged = true
+        }
+        break
+
+      default:
+        this.page = +page
+        pageChanged = true
+        break
+    }
+
+    if (pageChanged) {
+      this.emitter.emit('page:change')
+    }
+  }
+
+  /**
+   * Returns HTML pagination
+   * @return {string}
+   */
+  getPagination() {
+    if (this.active) {
+      return `
+      <nav>
+        <ul class="pagination justify-content-center">
+          ${this.#getPreviewsButton()}
+          ${this.#getPageButtons()}
+          ${this.#getNextButton()}
+        </ul>
+      </nav>`
+    }
+
+    return ''
   }
 }
