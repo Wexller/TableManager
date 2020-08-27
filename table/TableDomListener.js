@@ -21,6 +21,10 @@ export class TableDomListener {
       case 'pagination':
         this.emitter.emit('pagination:click', elData['page'])
         break
+
+      case 'order':
+        this.emitter.emit('order:click', elData['code'])
+        break
     }
   }
 }

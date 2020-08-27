@@ -9,30 +9,25 @@ export class TableManger {
   constructor(selector, options) {
     this.$el = document.querySelector(selector)
     this.emitter = new Emitter()
-
-    const {items, filter, order, header, pagination, currentPage, itemsPerPage} = options
-    this.options = {...options}
-    this.tableFilter = new TableFilter()
-    this.tableOrder = new TableOrder()
-
-    const paginationOptions = {
-      active: pagination,
-      currentPage: currentPage || +findGetParameter('page'),
-      itemsPerPage: itemsPerPage || items.length,
-      pageCount: pagination ? Math.ceil(items.length / itemsPerPage) : items.length,
-      $el: this.$el,
-      emitter: this.emitter
-    }
+    this.context = this
 
     this.#initSubscribers()
 
-    this.pagination = pagination
-      ? new TablePagination(paginationOptions)
-      : false
+    this.items = options['items'] || []
+    this.headerTitle = options['header'] && options['header']['title']
+      ? options['header']['title']
+      : {}
+    this.headerCodes = options['header'] && options['header']['codes']
+      ? options['header']['codes']
+      : {}
 
-    this.items = this.#getItems(items)
-    this.headerTitle = header['title'] || {}
-    this.headerDisplay = header['display'] || {}
+    this.usePagination = !!options['pagination']
+    this.#initPagination(options)
+
+    this.useOrder = !!options['order']
+    this.#initOrder(options)
+
+    this.tableFilter = new TableFilter()
 
     this.#render()
 
@@ -42,21 +37,28 @@ export class TableManger {
     })
   }
 
-  /**
-   *
-   * @param {Array} items
-   * @return {Array}
-   */
-  #getItems(items) {
-    let result = []
-
-    if (items && items.length) {
-      result = this.pagination.active
-        ? arrayChunks(items, this.pagination.itemsPerPage)
-        : items
+  #initOrder(options) {
+    if (this.useOrder) {
+      this.orderCodes = options['order']['codes'] || []
+      this.tableOrder = new TableOrder({emitter: this.emitter, order: options['order']})
     }
+  }
 
-    return result
+  #initPagination(options) {
+    if (this.usePagination) {
+      const paginationOptions = {
+        active: options['pagination'],
+        currentPage: options['currentPage'] || +findGetParameter('page'),
+        itemsPerPage: options['itemsPerPage'] || this.items.length,
+        pageCount: options['pagination']
+          ? Math.ceil(this.items.length / options['itemsPerPage'])
+          : this.items.length,
+        $el: this.$el,
+        emitter: this.emitter
+      }
+
+      this.pagination = new TablePagination(paginationOptions)
+    }
   }
 
   #initSubscribers() {
@@ -72,7 +74,7 @@ export class TableManger {
         <thead><tr>${this.#getTableHeader()}</tr></thead>
         <tbody>${this.#getTableBody()}</tbody>
       </table>
-      ${this.pagination ? this.pagination.getPagination() : ''}
+      ${this.usePagination ? this.pagination.getPagination() : ''}
     `
   }
 
@@ -83,18 +85,61 @@ export class TableManger {
   #getTableHeader() {
     if (this.headerDisplay && this.headerDisplay.length) {
       return this.headerDisplay
-        .map(key => {
-          if (typeof this.headerTitle[key] !== 'undefined') {
-            return `<th scope="col">${this.headerTitle[key]}</th>`
-          }
-        })
+        .map(key => this.#getHeaderCell(key))
         .join('')
     }
 
     return Object
       .keys(this.headerTitle)
-      .map(key => `<th scope="col">${this.headerTitle[key]}</th>`)
+      .map(key => this.#getHeaderCell(key))
       .join('')
+  }
+
+  /**
+   *
+   * @param {string} key
+   * @return {string}
+   */
+  #getHeaderCell(key) {
+    return typeof this.headerTitle[key] !== 'undefined'
+      ? `<th scope="col">${this.headerTitle[key]}${this.#getHeaderOrderIcon(key)}</th>`
+      : ''
+  }
+
+  /**
+   *
+   * @param {string} code
+   * @return {string}
+   */
+  #getHeaderOrderIcon(code) {
+    let result = ''
+    if (this.#isCodeInOrder(code)) {
+      result = `<i class="fa ${this.#getOrderClass(code)} order-items" data-type="order" data-code="${code}"></i>`
+    }
+
+    return result
+  }
+
+  /**
+   *
+   * @param code
+   * @return {boolean}
+   */
+  #isCodeInOrder(code) {
+    return this.useOrder && this.orderCodes.includes(code)
+  }
+
+  /**
+   * Returns font awesome icon class
+   * @param {string} code
+   * @return {string}
+   */
+  #getOrderClass(code) {
+    if (this.tableOrder.orderCode === code) {
+      return this.tableOrder.isOrderAsc ? 'fa-sort-asc' : 'fa-sort-desc'
+    } else {
+      return 'fa-sort'
+    }
   }
 
   /**
@@ -102,21 +147,27 @@ export class TableManger {
    * @returns {String}
    */
   #getTableBody() {
-    if (this.pagination) {
+    this.#sortItems()
+
+    if (this.usePagination) {
       const page = (this.pagination.page - 1) <= this.items.length
         ? this.pagination.page - 1
         : this.items.length - 1
 
-      return this.items[page]
-        .map(item => {
-          return `<tr>${this.#getTableItem(item)}</tr>`
-        }).join('')
+      const chunks = arrayChunks(this.items, this.pagination.itemsPerPage)
+
+      return chunks[page]
+        .map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
     }
 
     return this.items
-      .map(item => {
-        return `<tr>${this.#getTableItem(item)}</tr>`
-      }).join('')
+      .map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
+  }
+
+  #sortItems() {
+    if (this.useOrder) {
+      this.items.sort(this.tableOrder.getOrderFunction())
+    }
   }
 
   /**
@@ -125,8 +176,8 @@ export class TableManger {
    * @returns {String}
    */
   #getTableItem(item) {
-    if (this.headerDisplay && this.headerDisplay.length) {
-      return this.headerDisplay
+    if (this.headerCodes && this.headerCodes.length) {
+      return this.headerCodes
         .map((key, idx) => {
           if (typeof item[key] !== 'undefined') {
             return idx
