@@ -21,8 +21,13 @@ export function arrayChunks(array, size = 1) {
   return result
 }
 
+/**
+ * Search get parameter in query string
+ * @param {string} parameterName
+ * @return {string}
+ */
 export function findGetParameter(parameterName) {
-  let result = null
+  let result = ''
   let tmp = []
 
   location.search
@@ -36,4 +41,38 @@ export function findGetParameter(parameterName) {
     })
 
   return result
+}
+
+/**
+ * Return form data values
+ * @param {object} obj
+ * @return {object}
+ */
+export function getFormData(obj) {
+  return Object
+    .values(obj)
+    .reduce((res, field) => {
+      if (!field.name || !field.value) {
+        return res
+      }
+
+      if (field.type === 'radio') {
+        if (field.checked && !res[field.name]) {
+          res[field.name] = field.value
+        }
+      } else {
+        res[field.name] = field.value
+      }
+      return res
+    }, {})
+}
+
+/**
+ * Returns true if str1 contains str2
+ * @param {string} str1
+ * @param {string} str2
+ * @return {boolean}
+ */
+export function isStringIncludesSubstring(str1, str2) {
+  return !!str1.toLowerCase().includes(str2.toLowerCase())
 }

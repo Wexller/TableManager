@@ -7,3 +7,11 @@
   margin-left: 10px;
   cursor: pointer;
 }
+
+.card-body .form-group {
+  margin-bottom: 0.5rem;
+
+  .input-label {
+    margin-bottom: 0;
+  }
+}

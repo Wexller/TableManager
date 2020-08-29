@@ -8,6 +8,7 @@
     "sass": "^1.26.10"
   },
   "scripts": {
-    "dev": "parcel index.html"
+    "dev": "parcel index.html",
+    "build": "parcel build index.html"
   }
 }

@@ -5,11 +5,10 @@ export class TablePagination {
     this.active = active || false
     this.itemsPerPage = itemsPerPage
     this.page = (currentPage >= 1 && currentPage <= pageCount) ? currentPage : 1
-    this.pageCount = pageCount
+    this.pageCount = pageCount || 10
     this.emitter = emitter
-    this.$el = $el
 
-    this.emitter.subscribe('pagination:click', page => this.#paginationClickController(page))
+    this.emitter.subscribe('tablePagination:click', page => this.#paginationClickController(page))
   }
 
   /**
@@ -40,6 +39,8 @@ export class TablePagination {
    * @return {string}
    */
   #getPageButtons() {
+    this.#updateCurrentPageIfNecessary()
+
     return Array(this.pageCount)
       .fill('')
       .map((_, idx) => {
@@ -48,6 +49,17 @@ export class TablePagination {
                 </li>`
       })
       .join('')
+  }
+
+  #updateCurrentPageIfNecessary() {
+    if ((this.page) > this.pageCount) {
+      this.page = this.pageCount
+      return
+    }
+
+    if ((this.page) < 1) {
+      this.page = 1
+    }
   }
 
   /**
@@ -84,7 +96,7 @@ export class TablePagination {
   }
 
   /**
-   * Returns HTML pagination
+   * Returns HTML tablePagination
    * @return {string}
    */
   getPagination() {
@@ -100,5 +112,11 @@ export class TablePagination {
     }
 
     return ''
+  }
+
+  getCurrentPage() {
+    this.#updateCurrentPageIfNecessary()
+
+    return this.page
   }
 }

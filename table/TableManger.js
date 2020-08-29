@@ -10,24 +10,20 @@ export class TableManger {
     this.$el = document.querySelector(selector)
     this.emitter = new Emitter()
     this.context = this
+    this.items = options['items'] || []
 
     this.#initSubscribers()
 
-    this.items = options['items'] || []
-    this.headerTitle = options['header'] && options['header']['title']
-      ? options['header']['title']
-      : {}
-    this.headerCodes = options['header'] && options['header']['codes']
-      ? options['header']['codes']
-      : {}
+    this.#initHeaderTitles(options)
 
-    this.usePagination = !!options['pagination']
+    this.showPagination = !!options['pagination']
     this.#initPagination(options)
 
-    this.useOrder = !!options['order']
+    this.showOrder = !!options['order']
     this.#initOrder(options)
 
-    this.tableFilter = new TableFilter()
+    this.showFilter = !!options['filter']
+    this.#initFilter(options)
 
     this.#render()
 
@@ -37,15 +33,50 @@ export class TableManger {
     })
   }
 
+  #initHeaderTitles(options) {
+    this.header = {}
+    // Write header from options or from items
+    if (options['header']) {
+      Object.keys(options['header']).forEach(key => {
+        this.header[key] = {
+          title: options['header'][key]['title'] || key,
+          width: options['header'][key]['width'] || 'auto'
+        }
+      })
+    } else if (this.items.length) {
+      Object.keys(this.items[0]).forEach(key => {
+        this.header[key] = {
+          title: key,
+          width: 'auto'
+        }
+      })
+    }
+
+    this.headerTitles = {}
+    Object.keys(this.header).forEach(key => this.headerTitles[key] = this.header[key]['title'])
+    this.headerCodes = Object.keys(this.headerTitles)
+  }
+
   #initOrder(options) {
-    if (this.useOrder) {
-      this.orderCodes = options['order']['codes'] || []
+    if (this.showOrder) {
+      this.orderCodes = Object.keys(options['order']) || []
       this.tableOrder = new TableOrder({emitter: this.emitter, order: options['order']})
     }
   }
 
+  #initFilter(options) {
+    if (this.showFilter) {
+      this.filterCodes = options['filter']
+      this.tableFilter = new TableFilter({
+        emitter: this.emitter,
+        filter: options['filter'],
+        header: this.headerTitles
+      })
+    }
+  }
+
   #initPagination(options) {
-    if (this.usePagination) {
+    if (this.showPagination) {
       const paginationOptions = {
         active: options['pagination'],
         currentPage: options['currentPage'] || +findGetParameter('page'),
@@ -53,11 +84,10 @@ export class TableManger {
         pageCount: options['pagination']
           ? Math.ceil(this.items.length / options['itemsPerPage'])
           : this.items.length,
-        $el: this.$el,
         emitter: this.emitter
       }
 
-      this.pagination = new TablePagination(paginationOptions)
+      this.tablePagination = new TablePagination(paginationOptions)
     }
   }
 
@@ -70,12 +100,26 @@ export class TableManger {
    */
   #render() {
     this.$el.innerHTML = `
+      <div class="row">
+        <div class="${this.showFilter ? 'col-9' : 'col-12'}">
+          ${this.#getTable()}
+          ${this.showPagination && this.#isPaginationNecessary(this.items) ? this.tablePagination.getPagination() : ''}
+        </div>       
+        ${this.showFilter ? this.tableFilter.getFilterBlock() : ''}         
+      </div>      
+    `
+  }
+
+  /**
+   * Returns table template
+   * @return {string}
+   */
+  #getTable() {
+    return `
       <table class="table">
         <thead><tr>${this.#getTableHeader()}</tr></thead>
         <tbody>${this.#getTableBody()}</tbody>
-      </table>
-      ${this.usePagination ? this.pagination.getPagination() : ''}
-    `
+      </table>`
   }
 
   /**
@@ -83,16 +127,9 @@ export class TableManger {
    * @returns {String}
    */
   #getTableHeader() {
-    if (this.headerDisplay && this.headerDisplay.length) {
-      return this.headerDisplay
-        .map(key => this.#getHeaderCell(key))
-        .join('')
-    }
-
-    return Object
-      .keys(this.headerTitle)
-      .map(key => this.#getHeaderCell(key))
-      .join('')
+    return this.headerCodes.length
+      ? this.headerCodes.map(key => this.#getHeaderCell(key)).join('')
+      : ''
   }
 
   /**
@@ -101,9 +138,9 @@ export class TableManger {
    * @return {string}
    */
   #getHeaderCell(key) {
-    return typeof this.headerTitle[key] !== 'undefined'
-      ? `<th scope="col">${this.headerTitle[key]}${this.#getHeaderOrderIcon(key)}</th>`
-      : ''
+    return `<th scope="col" style="width: ${this.header[key]['width']}">
+              ${this.headerTitles[key]}${this.#getHeaderOrderIcon(key)}
+            </th>`
   }
 
   /**
@@ -126,7 +163,7 @@ export class TableManger {
    * @return {boolean}
    */
   #isCodeInOrder(code) {
-    return this.useOrder && this.orderCodes.includes(code)
+    return this.showOrder && this.orderCodes.includes(code)
   }
 
   /**
@@ -147,25 +184,62 @@ export class TableManger {
    * @returns {String}
    */
   #getTableBody() {
+    const items = this.showFilter ? this.#filterItems() : [...this.items]
     this.#sortItems()
 
-    if (this.usePagination) {
-      const page = (this.pagination.page - 1) <= this.items.length
-        ? this.pagination.page - 1
-        : this.items.length - 1
+    if (this.showPagination) {
+      const chunks = this.#getArrayChunks(items)
+      this.tablePagination.pageCount = chunks.length
+      const page = this.tablePagination.getCurrentPage() - 1
 
-      const chunks = arrayChunks(this.items, this.pagination.itemsPerPage)
-
-      return chunks[page]
-        .map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
+      if (this.#isPaginationNecessary(items)) {
+        return chunks[page].map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
+      } else {
+        chunks.map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
+      }
     }
 
-    return this.items
-      .map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
+    return items.map(item => `<tr>${this.#getTableItem(item)}</tr>`).join('')
   }
 
+  /**
+   * Returns chunks if tablePagination necessary
+   * @param {array} array
+   * @return {array}
+   */
+  #getArrayChunks(array) {
+    return this.#isPaginationNecessary(array)
+      ? arrayChunks(array, this.tablePagination.itemsPerPage)
+      : array
+  }
+
+  /**
+   * Check if tablePagination necessary
+   * @param {array} array
+   * @return {boolean}
+   */
+  #isPaginationNecessary(array) {
+    return array.length > this.tablePagination.itemsPerPage
+  }
+
+  /**
+   * Filter items and returns new array
+   * @return {[]}
+   */
+  #filterItems() {
+    let items = []
+    if (this.showFilter) {
+      items = this.items.filter(this.tableFilter.getFilterFunction())
+    }
+
+    return items
+  }
+
+  /**
+   * Sort items if showOrder is true
+   */
   #sortItems() {
-    if (this.useOrder) {
+    if (this.showOrder) {
       this.items.sort(this.tableOrder.getOrderFunction())
     }
   }
